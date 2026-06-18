@@ -97,4 +97,6 @@ scripts/build.sh               # regenerate icons + repackage
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[PolyForm Noncommercial License 1.0.0](LICENSE) — free for any noncommercial
+purpose (personal use, hobby projects, education, nonprofits, etc.). Commercial
+use is not permitted.

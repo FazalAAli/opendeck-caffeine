@@ -63,10 +63,6 @@ def caffeine_toggle():
     host("dconf", "write", "%s/cli-toggle" % CAF, "false" if cur else "true")
 
 
-def state_for(on):
-    return 0 if on else 1
-
-
 # ---------------------------------------------------------------------------
 # Minimal WebSocket client (RFC 6455, client side, stdlib only)
 #
@@ -182,7 +178,7 @@ def main():
     last = {"on": None}
 
     def push(on, ctxs):
-        s = state_for(on)
+        s = 0 if on else 1  # state 0 = ON icon, state 1 = OFF icon
         for c in ctxs:
             try:
                 ws.send_json(
