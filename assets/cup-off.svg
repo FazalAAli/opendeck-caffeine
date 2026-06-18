@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="0 0 144 144">
+  <g fill="none" stroke="#6e6e6e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- cup body (no steam, dimmed) -->
+    <path d="M40 60 L104 60 L99 104 Q96 116 83 116 L61 116 Q48 116 45 104 Z"/>
+    <!-- handle -->
+    <path d="M104 68 Q122 70 122 84 Q122 98 104 98"/>
+    <!-- saucer -->
+    <path d="M36 124 L108 124"/>
+  </g>
+</svg>
