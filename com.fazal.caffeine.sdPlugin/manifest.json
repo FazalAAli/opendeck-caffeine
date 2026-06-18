@@ -1,0 +1,39 @@
+{
+  "Name": "Caffeine",
+  "Description": "Toggle GNOME Caffeine; the icon reflects Caffeine's real state and stays in sync even when toggled elsewhere.",
+  "Author": "fazal",
+  "Version": "1.1.0",
+  "Icon": "icons/plugin",
+  "Category": "Custom",
+  "CodePathLin": "code/caffeine-plugin.py",
+  "CodePaths": {
+    "x86_64-unknown-linux-gnu": "code/caffeine-plugin.py",
+    "aarch64-unknown-linux-gnu": "code/caffeine-plugin.py"
+  },
+  "OS": [
+    {
+      "Platform": "linux"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.fazal.caffeine.toggle",
+      "Name": "Caffeine Toggle",
+      "Tooltip": "Toggle Caffeine; icon reflects current state",
+      "Icon": "icons/cup-on",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "icons/cup-on"
+        },
+        {
+          "Image": "icons/cup-off"
+        }
+      ]
+    }
+  ]
+}
