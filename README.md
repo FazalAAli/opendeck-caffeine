@@ -1,4 +1,4 @@
-## This project was vibecoded. It is provided as is. I generated it because I wanted it. I have tested the FlatPak and the native builds on my NixOS distro and given the code a cursory look to ensure it's not doing anything inherently unsafe. Other than that, it does what I need so there won't be any active development. If you'd like to contribute, please open a PR and I'd be happy to take a look (you might have to ping me.) 
+### This project was vibecoded. It is provided as is. I generated it because I wanted it. I have tested the FlatPak and the native builds on my NixOS distro and given the code a cursory look to ensure it's not doing anything inherently unsafe. Other than that, it does what I need so there won't be any active development. If you'd like to contribute, please open a PR and I'd be happy to take a look (you might have to ping me.) 
 
 # OpenDeck Caffeine
 
