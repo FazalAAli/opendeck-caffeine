@@ -23,6 +23,9 @@ import time
 
 CAF = "/org/gnome/shell/extensions/caffeine"
 WATCH_RESTART_SECONDS = 3
+# Cap inbound WebSocket frames so a malformed/huge declared length can't grow
+# our read buffer without bound (memory-exhaustion guard).
+MAX_FRAME_BYTES = 1 << 20  # 1 MiB
 
 # OpenDeck plugins run inside the Flatpak sandbox; reach the host with
 # flatpak-spawn. On a native install we call dconf directly.
@@ -30,7 +33,7 @@ IN_FLATPAK = os.path.exists("/.flatpak-info")
 
 
 def log(msg):
-    sys.stderr.write("[caffeine-plugin] %s\n" % msg)
+    sys.stderr.write(f"[caffeine-plugin] {msg}\n")
     sys.stderr.flush()
 
 
@@ -49,18 +52,20 @@ def host(*args):
 def caffeine_on():
     """True if Caffeine is currently active. Raises on a failed read so callers
     never mistake an error for 'off'."""
-    r = host("dconf", "read", "%s/user-enabled" % CAF)
+    r = host("dconf", "read", f"{CAF}/user-enabled")
     if r.returncode != 0:
-        raise RuntimeError("dconf read failed: %s" % r.stderr.strip())
+        raise RuntimeError(f"dconf read failed: {r.stderr.strip()}")
     return r.stdout.strip() == "true"
 
 
 def caffeine_toggle():
     """Flip Caffeine via its dedicated cli-toggle key (changing the value is
     what triggers the extension to toggle)."""
-    r = host("dconf", "read", "%s/cli-toggle" % CAF)
+    # Best-effort read: if it fails, cur defaults to False and the next
+    # `dconf watch` reconcile corrects any wrong guess, so we don't raise here.
+    r = host("dconf", "read", f"{CAF}/cli-toggle")
     cur = r.stdout.strip() == "true"
-    host("dconf", "write", "%s/cli-toggle" % CAF, "false" if cur else "true")
+    host("dconf", "write", f"{CAF}/cli-toggle", "false" if cur else "true")
 
 
 # ---------------------------------------------------------------------------
@@ -75,11 +80,11 @@ class WS:
         key = base64.b64encode(os.urandom(16)).decode()
         req = (
             "GET / HTTP/1.1\r\n"
-            "Host: 127.0.0.1:%d\r\n"
+            f"Host: 127.0.0.1:{port}\r\n"
             "Upgrade: websocket\r\n"
             "Connection: Upgrade\r\n"
-            "Sec-WebSocket-Key: %s\r\n"
-            "Sec-WebSocket-Version: 13\r\n\r\n" % (port, key)
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
         )
         self.sock.sendall(req.encode())
         buf = b""
@@ -90,7 +95,7 @@ class WS:
             buf += chunk
         status = buf.split(b"\r\n", 1)[0]
         if b"101" not in status:
-            raise ConnectionError("handshake failed: %r" % status)
+            raise ConnectionError(f"handshake failed: {status!r}")
         self.buf = buf.split(b"\r\n\r\n", 1)[1]
         self.send_lock = threading.Lock()
 
@@ -139,6 +144,8 @@ class WS:
             ln = struct.unpack(">H", self._recv_exact(2))[0]
         elif ln == 127:
             ln = struct.unpack(">Q", self._recv_exact(8))[0]
+        if ln > MAX_FRAME_BYTES:
+            raise ConnectionError(f"frame too large: {ln}")
         mask = self._recv_exact(4) if masked else b""
         payload = self._recv_exact(ln) if ln else b""
         if masked:
@@ -170,22 +177,21 @@ def main():
 
     ws = WS(port)
     ws.send_json({"event": register_event, "uuid": plugin_uuid})
-    log("registered as %s on port %d (flatpak=%s)"
-        % (plugin_uuid, port, IN_FLATPAK))
+    log(f"registered as {plugin_uuid} on port {port} (flatpak={IN_FLATPAK})")
 
     contexts = set()
     lock = threading.Lock()
-    last = {"on": None}
+    last = {"on": None}  # mutable cell so the nested closures can update state
 
     def push(on, ctxs):
-        s = 0 if on else 1  # state 0 = ON icon, state 1 = OFF icon
+        state = 0 if on else 1  # state 0 = ON icon, state 1 = OFF icon
         for c in ctxs:
             try:
                 ws.send_json(
-                    {"event": "setState", "context": c, "payload": {"state": s}}
+                    {"event": "setState", "context": c, "payload": {"state": state}}
                 )
             except Exception as e:
-                log("setState failed: %s" % e)
+                log(f"setState failed: {e}")
 
     def reconcile():
         """Read the real state and update any visible keys (skip on read error
@@ -193,7 +199,7 @@ def main():
         try:
             on = caffeine_on()
         except Exception as e:
-            log("state read failed: %s" % e)
+            log(f"state read failed: {e}")
             return
         with lock:
             ctxs = list(contexts)
@@ -219,7 +225,7 @@ def main():
                     if line.startswith(CAF):
                         reconcile()
             except Exception as e:
-                log("watch error: %s" % e)
+                log(f"watch error: {e}")
             finally:
                 if proc is not None:
                     try:
@@ -234,7 +240,7 @@ def main():
         try:
             opcode, payload = ws.recv()
         except Exception as e:
-            log("recv error: %s" % e)
+            log(f"recv error: {e}")
             break
         if opcode == 0x8:  # close
             log("server closed connection")
@@ -265,6 +271,7 @@ def main():
                 with lock:
                     contexts.discard(ctx)
             elif event == "keyDown" and ctx:
+                # Use cached state; fall back to a live read if not synced yet.
                 with lock:
                     before = last["on"]
                 if before is None:
@@ -276,12 +283,12 @@ def main():
                     ctxs = list(contexts)
                 push(predicted, ctxs)
         except Exception as e:
-            log("error handling %s: %s" % (event, e))
+            log(f"error handling {event}: {e}")
 
 
 if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        log("fatal: %s" % e)
+        log(f"fatal: {e}")
         sys.exit(1)
